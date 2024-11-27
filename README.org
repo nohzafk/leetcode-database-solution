@@ -1,5 +1,5 @@
 * Notes
-This document contains my solutions that are worth noting to the free problems in [[https://leetcode.com/problemset/database/][leet code database problemset]]
+This document contains my solutions that are worth noting to the free problems in [[https://leetcode.com/problemset/database/][leetcode database problemset]].
 
 ** pay attention to traps
 
