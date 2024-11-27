@@ -12,7 +12,7 @@
 ~NULL <> 'boring'~ is NULL, the row won't be included in the result.
 
 #+begin_example
-description    | 'boring'    | description <> 'boring'
+description     | 'boring'    | description <> 'boring'
 ----------------|-------------|----------------------
 'exciting'      | 'boring'    | TRUE
 'boring'        | 'boring'    | FALSE
@@ -71,12 +71,15 @@ Table joins with itself
 
 This should not be an easy problem, it requies self-join.
 
+#+begin_example
 +-------------+---------+
 | Column Name | Type    |
 +-------------+---------+
 | id          | int     |
 | email       | varchar |
 +-------------+---------+
+#+end_example
+
 id is the primary key (column with unique values) for this table.
 Each row of this table contains an email. The emails will not contain uppercase letters.
 
@@ -143,10 +146,12 @@ WHERE COALESCE(diff, 0) > 0
 
 Above solution is not correct when date are not be consecutive, for example, this test case
 
+#+begin_example
 | id | recordDate | temperature |
 | -- | ---------- | ----------- |
 | 1  | 2000-12-14 | 3           |
 | 2  | 2000-12-16 | 5           |
+#+end_example
 
 Solution
 
@@ -308,7 +313,7 @@ ORDER BY day
 
 #+end_src
 
-
+#+begin_example
 +---------------+---------+
 | Column Name   | Type    |
 +---------------+---------+
@@ -317,6 +322,7 @@ ORDER BY day
 | activity_date | date    |
 | activity_type | enum    |
 +---------------+---------+
+#+end_example
 
 This table may have duplicate rows.
 The activity_type column is an ENUM (category) of type ('open_session', 'end_session', 'scroll_down', 'send_message').
@@ -820,6 +826,7 @@ GROUP BY machine_id
 
 The key to this approach is using a CTE to transform the data (start, end) from multiple rows into a single row, as SQL calculations can only be performed on columns within the same row.
 
+#+begin_example
 +------------+------------+---------------+-----------+
 | machine_id | process_id | activity_type | timestamp |
 +------------+------------+---------------+-----------+
@@ -832,6 +839,7 @@ The key to this approach is using a CTE to transform the data (start, end) from 
 | ---------- | ---------- | ------- | ----- |
 | 0          | 0          | 0.712   | 1.52  |
 | 0          | 1          | 3.14    | 4.12  |
+#+end_example
 
 * 1667. Fix Names in a Table :easy:
 
