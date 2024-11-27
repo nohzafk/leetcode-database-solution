@@ -1,0 +1,1077 @@
+* Notes
+** pay attention to traps
+
+- if the key is not primary key, pay attention to row duplication, and NULL value
+- pay attention to the column name to be used in the final result
+
+** NULL Value
+- NULL represents absence of value
+- NULL is not equal to anything, including itself
+- Always handle NULL values explicitly in your comparisons
+
+~NULL <> 'boring'~ is NULL, the row won't be included in the result.
+
+#+begin_quote
+description    | 'boring'    | description <> 'boring'
+----------------|-------------|----------------------
+'exciting'      | 'boring'    | TRUE
+'boring'        | 'boring'    | FALSE
+NULL            | 'boring'    | NULL (Unknown)
+#+end_quote
+
+** Count
+Count(*) calculate all rows
+
+Count(field) ignore rows that field IS NULL
+
+** Using the ROUND function in SQL
+You can use the ROUND function in SQL to round a number to a specific decimal point.
+
+Here's how you can use it to round to 2 decimal points:
+#+begin_src sql
+SELECT ROUND(number, 2)
+#+end_src
+
+In this syntax:
+
+ - number is the number you want to round.
+ - 2 is the number of decimal places to round to.
+
+
+Alternatively, you can also use the DECIMAL function to achieve a similar result:
+#+begin_src sql
+SELECT CAST(price AS DECIMAL(10, 2)) AS rounded_price
+FROM prices;
+#+end_src
+
+In this syntax:
+
+ - 10 is the total number of digits.
+ - 2 is the number of decimal places to round to.
+
+* 181. Employees Earning More Than Their Managers :easy:
+
+| Column Name | Type    |
+|-------------+---------|
+| id          | int     |
+| name        | varchar |
+| salary      | int     |
+| managerId   | int     |
+
+#+begin_src sql
+SELECT
+    e1.name as Employee
+FROM Employee e1 JOIN Employee e2 on e1.managerId = e2.id
+WHERE e1.salary > e2.salary
+#+end_src
+
+Table joins with itself
+
+* 196. DELETE Duplicate Emails :easy:
+
+This should not be an easy problem, it requies self-join.
+
++-------------+---------+
+| Column Name | Type    |
++-------------+---------+
+| id          | int     |
+| email       | varchar |
++-------------+---------+
+id is the primary key (column with unique values) for this table.
+Each row of this table contains an email. The emails will not contain uppercase letters.
+
+
+Write a solution to delete all duplicate emails, keeping only one unique email with the smallest id.
+
+my solution is not so good
+
+#+begin_src sql
+DELETE FROM Person
+WHERE id NOT IN (
+    SELECT
+        MIN(id) as id
+    FROM Person
+    GROUP BY email
+)
+#+end_src
+
+** Self JOIN and filtering with condition
+
+#+begin_src sql
+DELETE FROM person p1 USING person p2
+WHERE p1.email = p2.email
+  AND p1.id > p2.id;
+#+end_src
+
+
+~DELET FROM person p1 USING person p2~ is a special PostgreSQL syntax for DELETE, it is like an INNER JOIN.
+
+Use Standard SQL without PostgreSQL special syntax
+
+#+begin_src sql
+DELETE FROM person p1
+WHERE EXISTS (
+    SELECT 1
+    FROM person p2
+    WHERE p1.email = p2.email
+    AND p1.id > p2.id
+);
+#+end_src
+
+* 197. Rising Temperature :easy:
+Find all dates' id with higher temperatures compared to its previous dates (yesterday).
+
+This should be not an easy problem, it requires window frame functions and the dates might not be consecutive (contradicts with the description)
+
+If the dates are consecutive
+
+#+begin_src sql
+WITH win_frame AS (
+    SELECT
+        id,
+        temperature - LAG(temperature) OVER(
+            ORDER BY recordDate
+        ) AS diff
+    FROM Weather
+    ORDER BY recordDate
+)
+SELECT
+    id AS Id
+FROM win_frame
+WHERE COALESCE(diff, 0) > 0
+#+end_src
+
+Above solution is not correct when date are not be consecutive, for example, this test case
+
+| id | recordDate | temperature |
+| -- | ---------- | ----------- |
+| 1  | 2000-12-14 | 3           |
+| 2  | 2000-12-16 | 5           |
+
+Solution
+
+#+begin_src sql
+WITH win_frame AS (
+    SELECT
+        id,
+        temperature - LAG(temperature) OVER(ORDER BY recordDate) AS diff,
+        LAG(recordDate) OVER(ORDER BY recordDate) AS prev_date,
+        recordDate
+    FROM Weather
+    ORDER BY recordDate
+)
+SELECT
+    id AS Id
+FROM win_frame
+WHERE COALESCE(diff, 0) > 0
+  AND prev_date = recordDate - 1
+#+end_src
+
+** DATE calculation on PostgreSQL
+
+if type is timestamp: recordDate - INTERVAL '1 DAY';
+
+if type is date: recordDate - 1;
+
+* 1084. Sales Analysis III :easy:
+
+It could be an easy problem, if you have the right mindset to use MIN/MAX sale_date.
+
+My solution, filter out the product with sales happened outside the first quarter
+
+#+begin_src sql
+WITH id_year_month_grp AS (
+    SELECT
+        product_id,
+        EXTRACT(YEAR FROM sale_date) as year,
+        EXTRACT(MONTH FROM sale_date) as month
+    FROM Sales
+    GROUP BY product_id, year, month
+    ORDER BY product_id, year, month
+)
+SELECT product_id, b.product_name
+FROM id_year_month_grp a JOIN Product b USING(product_id)
+WHERE product_id NOT IN(
+    SELECT DISTINCT(product_id)
+    FROM id_year_month_grp
+    WHERE year <> 2019 or month > 3
+)
+#+end_src
+
+** Two more efficient approaches
+
+*** Uing GROUP BY with HAVING
+
+#+begin_src sql
+SELECT p.product_id, p.product_name
+FROM Sales s
+JOIN Product p ON s.product_id = p.product_id
+GROUP BY p.product_id, p.product_name
+HAVING MIN(s.sale_date) >= '2019-01-01'
+   AND MAX(s.sale_date) <= '2019-03-31';
+#+end_src
+
+products that were only sold in the first quarter of 2019, means in Sales table the sale date should only range from 2019-01-01 to 2019-03-31
+
+*** Using NOT EXISTS
+
+#+begin_src sql
+SELECT p.product_id, p.product_name
+FROM Product p
+WHERE EXISTS (
+    SELECT 1 FROM Sales s
+    WHERE s.product_id = p.product_id
+    AND s.sale_date BETWEEN '2019-01-01' AND '2019-03-31'
+)
+AND NOT EXISTS (
+    SELECT 1 FROM Sales s
+    WHERE s.product_id = p.product_id
+    AND s.sale_date NOT BETWEEN '2019-01-01' AND '2019-03-31'
+);
+#+end_src
+
+Let's understand EXISTS and how this query works:
+
+1. EXISTS Operator:
+
+- EXISTS is a boolean operator that returns TRUE if the subquery returns any rows
+- Returns FALSE if the subquery returns no rows
+- The SELECT 1 in the subquery is a common practice because EXISTS only cares about row existence, not the actual values
+- EXISTS stops processing as soon as it finds one matching row (short-circuit evaluation)
+
+2. Query Execution Flow:
+
+#+begin_quote
+-- For each product in the Product table, the database:
+
+Step 1: Takes a product (p)
+Step 2: Checks first EXISTS condition
+        - Looks for ANY sales of this product in Q1 2019
+        - Returns TRUE if found, FALSE if not
+
+Step 3: If Step 2 is TRUE, checks second NOT EXISTS condition
+        - Looks for ANY sales of this product outside Q1 2019
+        - Returns TRUE if none found, FALSE if any found
+
+Step 4: Returns the product if:
+        - First EXISTS is TRUE (has sales in Q1 2019)
+        AND
+        - NOT EXISTS is TRUE (no sales outside Q1 2019)
+#+end_quote
+
+#+begin_quote
+Product in Q1 2019 only?
+┌─────────────────────┐
+│ Check each product  │
+└─────────┬───────────┘
+          │
+    ┌─────▼─────┐
+    │ Has sales │ No
+    │ in Q1     ├─────────┐
+    │ 2019?     │         │
+    └─────┬─────┘         │
+          │ Yes           │
+    ┌─────▼─────┐         │
+    │ Has sales │ Yes     │
+    │ outside   ├─────┐   │
+    │ Q1 2019?  │     │   │
+    └─────┬─────┘     │   │
+          │ No        │   │
+    ┌─────▼─────┐     │   │
+    │ Include   │   Skip  Skip
+    │ in result │
+    └───────────┘
+#+end_quote
+
+* 1141. User Activity for the Past 30 Days I :easy:
+
+It should not be an easy question, it requires date calculation in SQL.
+
+#+begin_src sql
+WITH user_daily_activity_cnt AS(
+    SELECT
+        activity_date, user_id, COUNT(*)
+    FROM Activity
+    WHERE activity_date BETWEEN
+        date '2019-07-27' - INTERVAL '29 DAY'  -- Start date (29 days back to include end date)
+        AND '2019-07-27'
+    GROUP BY activity_date, user_id
+    -- HAVING COUNT(*) >= 1
+    ORDER BY activity_date
+)
+SELECT
+    activity_date as day,
+    COUNT(*) as active_users
+FROM user_daily_activity_cnt
+GROUP BY day
+ORDER BY day
+
+#+end_src
+
+
++---------------+---------+
+| Column Name   | Type    |
++---------------+---------+
+| user_id       | int     |
+| session_id    | int     |
+| activity_date | date    |
+| activity_type | enum    |
++---------------+---------+
+
+This table may have duplicate rows.
+The activity_type column is an ENUM (category) of type ('open_session', 'end_session', 'scroll_down', 'send_message').
+The table shows the user activities for a social media website.
+Note that each session belongs to exactly one user.
+
+
+Write a solution to find the daily active user count for a period of 30 days ending 2019-07-27 inclusively. A user was active on someday if they made at least one activity on that day.
+
+** Filter date within 30-day period
+
+Date arithmetic functions vary by SQL dialect:
+
+#+begin_src sql
+-- MySQL/MariaDB
+DATE_SUB() or DATE_ADD()
+
+-- PostgreSQ
+date '2019-07-27' - interval '29 days'
+
+-- SQL Server
+DATEADD(day, -29, '2019-07-27')
+
+-- Oracle
+DATE '2019-07-27' - 29
+#+end_src
+
+
+#+begin_src sql
+SELECT *
+FROM your_table
+WHERE activity_date >= DATE_SUB('2019-07-27', INTERVAL 29 DAY)
+AND activity_date <= '2019-07-27'
+#+end_src
+
+** be careful using BETWEEN AND
+
+Why 29 days instead of 30:
+
+When using BETWEEN with dates, both start and end dates are ~inclusive~
+To get a 30-day period including the end date, we subtract 29 days
+Example: June 28 to July 27 = 30 days (counting both days)
+
+* 1179. Reformat Department Table :easy:
+
+Rearrange Table: from one column multiple rows (long format) to one row multiple columns (wide format)
+
+This operaiton is called pivoting or spreading
+
+#+begin_src sql
+SELECT
+    id,
+    MAX(CASE WHEN month = 'Jan' THEN revenue END) as Jan_Revenue,
+    MAX(CASE WHEN month = 'Feb' THEN revenue END) as Feb_Revenue,
+    MAX(CASE WHEN month = 'Mar' THEN revenue END) as Mar_Revenue,
+    MAX(CASE WHEN month = 'Apr' THEN revenue END) as Apr_Revenue,
+    MAX(CASE WHEN month = 'May' THEN revenue END) as May_Revenue,
+    MAX(CASE WHEN month = 'Jun' THEN revenue END) as Jun_Revenue,
+    MAX(CASE WHEN month = 'Jul' THEN revenue END) as Jul_Revenue,
+    MAX(CASE WHEN month = 'Aug' THEN revenue END) as Aug_Revenue,
+    MAX(CASE WHEN month = 'Sep' THEN revenue END) as Sep_Revenue,
+    MAX(CASE WHEN month = 'Oct' THEN revenue END) as Oct_Revenue,
+    MAX(CASE WHEN month = 'Nov' THEN revenue END) as Nov_Revenue,
+    MAX(CASE WHEN month = 'Dec' THEN revenue END) as Dec_Revenue
+FROM Department
+GROUP BY id
+ORDER BY id;
+#+end_src
+
+The mental model is that after using GROUP BY, we are operating on a set of rows, so the aggregation function (MAX/SUM) is needed because SQL needs to know how to combine multiple values.
+
+How Aggregation Works Here:
+#+begin_src sql
+MAX(CASE WHEN month = 'Jan' THEN revenue END)
+#+end_src
+
+For each ID:
+
+If month is 'Jan', CASE returns revenue
+If month isn't 'Jan', CASE returns NULL
+MAX picks the non-NULL value (if it exists)
+If no January revenue exists, MAX returns NULL
+
+* 1193. Monthly Transactions I :medium:
+Two poins:
+
+First is to extract year and month and use them to group the table, and then use
+them to construct the month string (with the help of LPAD function).
+
+Second is to add two columns about approved transaction to the group result by
+using CASE inside the SUM aggregation function.
+
+#+begin_src sql
+SELECT
+  a.t_year || '-' || LPAD(a.t_month::text, 2, '0') as month,
+  a.country,
+  COUNT(a.id) as trans_count,
+  SUM(CASE WHEN a.state = 'approved' THEN 1 ELSE 0 END)  as approved_count,
+  SUM(a.amount) as trans_total_amount,
+  SUM(CASE WHEN a.state = 'approved' THEN a.amount ELSE 0 END) as approved_total_amount
+FROM (
+  SELECT
+    *, EXTRACT(YEAR FROM trans_date) as t_year, EXTRACT(MONTH from trans_date) as t_month
+  FROM Transactions
+) a
+GROUP BY
+  a.t_year,
+  a.t_month,
+  a.country
+#+end_src
+
+
+* 1204. Last Person to Fit in the Bus :medium:
+typical window function solution
+
+#+begin_src sql
+SELECT
+  a.person_name
+FROM (
+  SELECT
+    person_name,
+    turn,
+    sum(weight) OVER(
+      ORDER BY turn ASC
+    ) as acc
+  FROM Queue
+) a
+WHERE a.acc <= 1000
+ORDER BY a.acc DESC
+LIMIT 1
+#+end_src
+
+* 1211. Queries Quality and Percentage :easy:
+
+Use CASE statement.
+
+#+begin_src sql
+SELECT
+    query_name,
+    ROUND(AVG(rating / position), 2) AS quality,
+    ROUND(
+        SUM(
+            CASE
+                WHEN rating < 3 THEN 1 ELSE 0
+            END
+        ) / COUNT(rating) * 100, 2) AS poor_query_percentage
+FROM Queries
+GROUP BY query_name
+#+end_src
+
+query_name might be null, as it is not the primary key
+
+* 1251. Average Selling Price :easy:
+
+It should not be an easy problem, it requires understanding of using LEFT JOIN with BETWEEN AND, and NULLIF function.
+
+My soluiton, it is not so great.
+
+#+begin_src sql
+-- Write your PostgreSQL query statement below
+WITH cross_product AS (
+    SELECT
+        u.product_id,
+        u.units,
+        CASE
+            WHEN u.purchase_date >= p.start_date AND u.purchase_date <= p.end_date THEN u.units * p.price ELSE 0
+        END as prices
+    FROM UnitsSold u CROSS JOIN Prices p
+    WHERE u.product_id = p.product_id
+), total_prices AS (
+    SELECT
+    product_id, SUM(prices)
+    FROM cross_product
+    GROUP BY product_id
+    HAVING SUM(prices) > 0
+), total_units AS (
+    SELECT
+        product_id, SUM(units)
+    FROM cross_product
+    WHERE prices > 0
+    GROUP BY product_id
+)
+SELECT
+    product_id,
+    CASE
+       WHEN SUM(tp.sum) IS NULL THEN 0
+       ELSE ROUND(SUM(tp.sum) / SUM(tu.sum), 2)
+    END AS average_price
+FROM
+    (SELECT DISTINCT(product_id) FROM prices)
+    LEFT JOIN total_prices tp USING(product_id)
+    LEFT JOIN total_units tu USING(product_id)
+GROUP BY product_id
+#+end_src
+
+** A optimized solution
+
+#+begin_src sql
+SELECT
+    p.product_id,
+    COALESCE(ROUND(SUM(u.units * p.price) * 1.0 / NULLIF(SUM(u.units), 0), 2), 0) as average_price
+FROM Prices p
+LEFT JOIN UnitsSold u
+    ON p.product_id = u.product_id
+    AND u.purchase_date BETWEEN p.start_date AND p.end_date
+GROUP BY p.product_id;
+#+end_src
+
+The key insight is understanding the ~LEFT JOIN behavior on with Non-Foreign Key Relations~
+
+Each row on the left table will match each row on the right table (filtered with the provided condition)
+
+#+begin_src sql
+FROM Prices p
+LEFT JOIN UnitsSold u
+    ON p.product_id = u.product_id                         -- Regular equality join
+    AND u.purchase_date BETWEEN p.start_date AND p.end_date -- Range-based condition
+#+end_src
+
+main takeaway
+
+- range conditon ~BETWEEN AND~
+- NULLIF
+
+
+*** NULLIF
+- NULLIF prevents division by zero by converting the denominator to NULL.
+- NULLIF is often used with COALESCE which can then convert NULL results to meaningful values (like 0)
+- This pattern is more concise than CASE statements
+- Always consider using NULLIF for safe division operations
+
+
+#+begin_src sql
+-- Why NULLIF is Safe
+
+-- Consider these scenarios:
+-- Scenario 1: No sales (SUM(units) = 0)
+NULLIF(0, 0) --> Returns NULL
+
+-- Scenario 2: Has sales (SUM(units) = 100)
+NULLIF(100, 0) --> Returns 100
+
+-- When no sales:
+SUM(u.units * p.price) * 1.0 / NULLIF(SUM(u.units), 0)
+-- becomes:
+100 * 1.0 / NULL --> Results in NULL
+
+-- Using NULLIF with COALESCE
+-- This handles both:
+-- 1. Division by zero → NULL from NULLIF
+-- 2. Converting NULL to 0 → COALESCE
+COALESCE(
+    SUM(units * price) / NULLIF(SUM(units), 0),
+    0
+)
+
+-- Using CASE
+CASE
+    WHEN SUM(units) = 0 THEN 0
+    ELSE SUM(units * price) / SUM(units)
+END
+-- NULLIF is more concise
+#+end_src
+
+* 1280. Students and Examinations :easy:
+#+begin_src sql
+SELECT
+   a.student_id, a.student_name, a.subject_name, COUNT(e.subject_name) as attended_exams
+FROM Examinations e
+    RIGHT JOIN (SELECT * FROM Students CROSS JOIN Subjects) AS a
+    ON a.student_id = e.student_id and a.subject_name = e.subject_name
+GROUP BY a.student_id, a.subject_name
+ORDER BY a.student_id
+#+end_src
+
+The technique is to use ~CROSS JOIN~ to generate all the pairs of (student_id, subject_name), and then join the validate pairs of (student_id, subject_name) in table Examinations.
+
+Another important technique is to be careful of the choice of which field to ~COUNT~, because there are pairs of (student_id, subject_name) missing in e, we must COUNT on e.subject_name, not a.subject_name
+
+However above solution results in Time Limit Exceed.
+
+We need to change it to use LEFT JOIN.
+
+#+begin_src sql
+
+SELECT
+    s.student_id, s.student_name, sub.subject_name, COUNT(e.subject_name) as attended_exams
+FROM Students s CROSS JOIN Subjects sub
+    LEFT JOIN Examinations e ON s.student_id = e.student_id AND sub.subject_name = e.subject_name
+GROUP BY s.student_id, sub.subject_name
+ORDER BY s.student_id
+
+#+end_src
+
+
+** why the first solution is not good
+#+begin_src mermaid :file derived_table_is_not_good.png
+graph TD
+    subgraph Query1[First Query]
+        A1[Students] --> B1[CROSS JOIN]
+        C1[Subjects] --> B1
+        B1 --> D1[Derived Table 'a']
+        E1[Examinations] --> F1[RIGHT JOIN]
+        D1 --> F1
+        F1 --> G1[GROUP BY]
+    end
+
+    subgraph Query2[Second Query]
+        A2[Students] --> B2[CROSS JOIN]
+        C2[Subjects] --> B2
+        B2 --> D2[LEFT JOIN]
+        E2[Examinations] --> D2
+        D2 --> G2[GROUP BY]
+    end
+
+    style Query1 fill:#f9f,stroke:#333,stroke-width:4px
+    style Query2 fill:#9ff,stroke:#333,stroke-width:4px
+#+end_src
+
+#+RESULTS:
+[[file:derived_table_is_not_good.png]]
+
+
+~LEFT JOIN is better than RIGHT JOIN~. Most query optimizers are better tuned for LEFT JOIN operations as they are more commonly used.
+
+(SELECT * FROM Students CROSS JOIN Subjects) creates a derived table.
+
+Derived tables can force the database to materialize intermediate results, consuming additional memory and processing time.
+
+* 1321. Restaurant Growth :medium:
+Acceptance Rate 54.0%
+
+typical moving average problem, use window function
+
+use SUM to aggreate amount on the visited_on first, then use window function to get a moving average, finally use OFFSET to remove those rows that use less than 7 rows to average.
+
+#+begin_src sql
+-- Write your PostgreSQL query statement below
+
+SELECT
+    visited_on,
+    SUM(amount) OVER (
+        ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
+    ) as amount,
+    ROUND(
+        AVG(amount) OVER (
+            ORDER BY visited_on
+            ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
+        )
+    , 2) as average_amount
+FROM (
+    SELECT
+        visited_on, SUM(amount) AS amount
+    FROM Customer
+    GROUP BY visited_on
+)
+ORDER BY visited_on
+OFFSET 6
+#+end_src
+* 1341. Movie Rating :medium:
+#+begin_src sql
+SELECT
+    name AS results
+FROM (
+    SELECT
+        u.name, COUNT(rating) as cnt
+    FROM MovieRating LEFT JOIN Users u USING(user_id)
+    GROUP BY user_id, u.name
+    ORDER BY cnt DESC, u.name ASC
+    LIMIT 1
+)
+UNION ALL
+SELECT title as results
+FROM (
+    SELECT
+        m.title, AVG(rating) as average_rating
+    FROM MovieRating mr LEFT JOIN Movies m USING(movie_id)
+    WHERE EXTRACT(YEAR FROM mr.created_at) = 2020
+      AND EXTRACT(MONTH FROM mr.created_at) = 2
+    GROUP BY movie_id, m.title
+    ORDER BY average_rating DESC, m.title ASC
+    LIMIT 1
+)
+#+end_src
+
+Use LIMIT 1 to select the targe row
+Use UNION to stack rows
+
+* 1393. Capital Gain/Loss :medium:
+#+begin_src sql
+WITH rows AS (
+    SELECT
+        stock_name,
+        SUM(0 - price) AS sum
+    FROM Stocks
+    WHERE operation = 'Buy'
+    GROUP BY stock_name
+    UNION ALL
+    SELECT
+        stock_name,
+        SUM(price) AS sum
+    FROM Stocks
+    WHERE operation = 'Sell'
+    GROUP BY stock_name
+)
+SELECT
+    stock_name, SUM(sum) AS capital_gain_loss
+FROM rows
+GROUP BY stock_name
+#+end_src
+
+A more compact solution
+
+#+begin_src sql
+SELECT
+    stock_name,
+    SUM(
+        CASE WHEN operation = 'Buy' THEN 0 - price ELSE price END
+    ) AS capital_gain_loss
+FROM Stocks
+GROUP BY stock_name
+#+end_src
+* 1484. Group Sold Products By The Date :easy:
+aggreate string while grouping
+
+PostgreSQL: ~STRING_AGG~
+
+#+begin_src sql
+SELECT
+    sell_date,
+    COUNT(DISTINCT product) AS num_sold,
+    STRING_AGG(DISTINCT product, ',' ORDER BY product) AS products
+FROM Activities
+GROUP BY sell_date
+ORDER BY sell_date
+#+end_src
+
+* 1527. Patients With a Condition :easy:
+
+field conditions contains 0 or more code separated by spaces.
+
+looking for conditions of the patients who have Type I Diabetes. Type I Diabetes always starts with DIAB1 prefix.
+
+#+begin_src sql
+SELECT
+    ,*
+FROM Patients
+WHERE
+    conditions ~ '(^|\s)DIAB1\w*'
+
+
+--- ANOTHER SOLUTION
+
+SELECT
+    ,*
+FROM Patients
+WHERE
+    conditions like 'DIAB1%' or conditions like '% DIAB1%'
+
+#+end_src
+
+
+PostgreSQL regular experssion
+
+
+Basic Syntax:
+
+column_name ~ 'pattern'
+
+Where:
+
+#+begin_quote
+
+~ is PostgreSQL's regular expression match operator
+~* would be case-insensitive match
+!~ would be "does not match"
+
+#+end_quote
+
+* 1661. Average Time of Process per Machine :easy:
+
+Interesting Question, not really an easy problem.
+
+#+begin_src sql
+WITH rows AS (
+-- TURN data on different rows into the same row
+    SELECT
+        machine_id,
+        process_id,
+        MIN(timestamp) as t_start,
+        MAX(timestamp) as t_end
+    FROM Activity
+    GROUP BY machine_id, process_id
+    ORDER BY machine_id, process_id
+)
+SELECT
+    machine_id, CAST(SUM(t_end - t_start) / COUNT(process_id) AS DECIMAL(10, 3)) AS processing_time
+FROM rows
+GROUP BY machine_id
+#+end_src
+
+The key to this approach is using a CTE to transform the data (start, end) from multiple rows into a single row, as SQL calculations can only be performed on columns within the same row.
+
++------------+------------+---------------+-----------+
+| machine_id | process_id | activity_type | timestamp |
++------------+------------+---------------+-----------+
+| 0          | 0          | start         | 0.712     |
+| 0          | 0          | end           | 1.520     |
+| 0          | 1          | start         | 3.140     |
+| 0          | 1          | end           | 4.120     |
+
+| machine_id | process_id | t_start | t_end |
+| ---------- | ---------- | ------- | ----- |
+| 0          | 0          | 0.712   | 1.52  |
+| 0          | 1          | 3.14    | 4.12  |
+
+* 1667. Fix Names in a Table :easy:
+
+String concatenation
+
+Oracle, SQL Server, PostgreSQL 8.3+, DB2, You use the ⁠|| operator for concatenation.
+
+=SELECT 'Hello, ' || 'world' AS result;=
+
+MySQL
+use the ⁠CONCAT() function.
+
+=SELECT CONCAT('Hello, ', 'world') AS result;=
+
+
+SUBSTRING is 1-index based not 0, SUBSTRING(string, starting_position, length)
+* 1789. Primary Department for Each Employee :easy:
+#+begin_src sql
+SELECT
+    employee_id, department_id
+FROM Employee
+WHERE primary_flag = 'Y'
+UNION
+SELECT
+    employee_id, department_id
+FROM Employee
+WHERE employee_id IN
+(
+    SELECT employee_id FROM
+    (
+        SELECT
+            employee_id, COUNT(*)
+        FROM Employee
+        GROUP BY employee_id
+        HAVING COUNT(*) = 1
+    )
+)
+#+end_src
+
+a better way of writing
+
+#+begin_src sql
+SELECT DISTINCT employee_id, department_id
+FROM Employee e
+WHERE primary_flag = 'Y'
+   OR employee_id IN (
+      SELECT employee_id
+      FROM Employee
+      GROUP BY employee_id
+      HAVING COUNT(*) = 1
+   );
+#+end_src
+
+we don't need a COUNT(\*) column to be existed in SELECT in order to use ~HAVING COUNT(*)~
+
+* 1795. Rearrange Products Table :easy:
+
+Rearrange Table: from one row multiple columns (wide format) to one column multiple rows (long format) (so UNION is used to stack rows)
+
+This operatin is called
+1. UNPIVOT (in SQL Server terminology)
+2. MELT (in data analysis terminology, particularly in pandas)
+3. GATHERING (in some data processing contexts)
+
+#+begin_src sql
+SELECT
+    product_id, 'store1' AS store, store1 AS price
+FROM Products WHERE store1 IS NOT NULL
+UNION
+SELECT
+    product_id, 'store2' AS store, store2 AS price
+FROM Products WHERE store2 IS NOT NULL
+UNION
+SELECT
+    product_id, 'store3' AS store, store3 AS price
+FROM Products WHERE store3 IS NOT NULL
+#+end_src
+
+
+directly use String literal as a column
+
+* 1873. Calculate Special Bonus :easy:
+
+Number operation: employee_id % 2 = 1
+String starts with M: name LIKE 'M%'
+* 1907. Count Salary Categories :easy:
+
+Not really an easy problem, if you didn't come up with the idea of using UNION.
+
+A common challenge when dealing with categorical grouping in SQL is to preserve missing category.
+
+
+The issue occurs because GROUP BY only includes categories that exist in the data.
+
+** Using a CTE with CROSS JOIN (Most Common Approach)
+#+begin_src sql
+WITH Categories AS (
+    SELECT 'Low Salary' as category
+    UNION ALL SELECT 'Average Salary'
+    UNION ALL SELECT 'High Salary'
+),
+Categorized AS (
+    SELECT
+        CASE
+            WHEN income < 20000 THEN 'Low Salary'
+            WHEN income BETWEEN 20000 AND 50000 THEN 'Average Salary'
+            WHEN income > 50000 THEN 'High Salary'
+        END as category,
+        account_id
+    FROM Accounts
+)
+SELECT
+    c.category,
+    COUNT(a.account_id) as accounts_count
+FROM Categories c
+LEFT JOIN Categorized a ON c.category = a.category
+GROUP BY c.category;
+
+#+end_src
+
+** Using VALUES (More Concise, Supported in PostgreSQL)
+#+begin_src sql
+SELECT
+    v.category,
+    COUNT(a.account_id) as accounts_count
+FROM (
+    VALUES
+        ('Low Salary'),
+        ('Average Salary'),
+        ('High Salary')
+) as v(category)
+LEFT JOIN (
+    SELECT
+        CASE
+            WHEN income < 20000 THEN 'Low Salary'
+            WHEN income BETWEEN 20000 AND 50000 THEN 'Average Salary'
+            WHEN income > 50000 THEN 'High Salary'
+        END as category,
+        account_id
+    FROM Accounts
+) a ON v.category = a.category
+GROUP BY v.category;
+#+end_src
+
+** Explanation
+#+begin_quote
+Initial Data       →        Categorized        →      Final Result
+┌───────────┐      →    ┌───────────────┐      →   ┌─────────────────┐
+│ Accounts  │      →    │ All possible  │      →   │ Categories with │
+│ with      │      →    │ categories    │      →   │ counts (even 0) │
+│ incomes   │      →    │ (base table)  │      →   │                 │
+└─────┬─────┘      →    └───────┬───────┘      →   └─────────────────┘
+      │            →            │                           ▲
+      │            →            │                           │
+      └────────────→────────────┘            ───────────────┘
+                   LEFT JOIN
+#+end_quote
+
+
+Key Points to Remember:
+
+- The LEFT JOIN ensures all categories from your base table (Categories) are preserved
+- COUNT() will return 0 for categories with no matches
+- This approach is more maintainable as you can easily add/remove categories
+
+Common Pitfalls to Avoid:
+
+- Using RIGHT JOIN instead of LEFT JOIN (makes the query less intuitive)
+- Forgetting to GROUP BY after the JOIN
+- ~Using COUNT(*) instead of COUNT(account_id) (might give incorrect results with LEFT JOIN)~
+
+** Optimized Solution
+
+Use UNION and select string literal, instead of grouping
+
+#+begin_src sql
+select 'Low Salary' as category, count(account_id) as accounts_count from accounts where income <20000
+union
+select 'Average Salary' as category, count(account_id) as accounts_count from accounts where income >= 20000 and income <= 50000
+union
+select 'High Salary' as category, count(account_id) as accounts_count from accounts where income > 50000
+#+end_src
+* 1934. Confirmation Rate :medium:
+
+It requires COALESCE and NULLIF
+
+#+begin_src sql
+SELECT
+    user_id,
+    COALESCE(
+        ROUND(
+            SUM(CASE WHEN c.action = 'confirmed' THEN 1.0 ELSE 0 END)
+            /
+            NULLIF(COUNT(c.time_stamp), 0)
+        , 2)
+    , 0) AS confirmation_rate
+FROM Signups s LEFT JOIN Confirmations c USING(user_id)
+GROUP BY user_id
+#+end_src
+* 1965. Employees with missing information :easy:
+
+=FULL JOIN= and select rows based on the NULL value, and then use Union
+
+#+begin_src sql
+WITH a AS (
+    SELECT e.employee_id as id1, s.employee_id as id2 FROM Employees e FULL JOIN Salaries s ON e.employee_id = s.employee_id
+)
+SELECT id2 as employee_id FROM a WHERE a.id1 IS NULL AND a.id2 IS NOT NULL
+UNION
+SELECT id1 as employee_id FROM a WHERE a.id1 IS NOT NULL AND a.id2 IS NULL
+ORDER BY employee_id
+#+end_src
+
+A more clean solution, use COALESCE
+
+#+begin_src sql
+SELECT
+    COALESCE(e.employee_id, s.employee_id) AS employee_id
+FROM Employees e FULL JOIN Salaries s USING (employee_id)
+WHERE e.name IS NULL OR s.salary IS NULL
+#+end_src
+
+* 3220. Odd and Even Transactions :medium:
+
+This should be marked as easy problem.
+
+#+begin_src sql
+SELECT
+    transaction_date,
+    SUM(
+        CASE
+            WHEN amount % 2 = 1 THEN amount ELSE 0
+        END
+    ) AS odd_sum,
+    SUM(
+        CASE
+            WHEN amount % 2 = 0 THEN amount ELSE 0
+        END
+    ) AS even_sum
+FROM transactions
+GROUP BY transaction_date
+ORDER BY transaction_date
+#+end_src
