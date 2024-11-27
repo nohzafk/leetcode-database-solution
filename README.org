@@ -11,13 +11,13 @@
 
 ~NULL <> 'boring'~ is NULL, the row won't be included in the result.
 
-#+begin_quote
+#+begin_example
 description    | 'boring'    | description <> 'boring'
 ----------------|-------------|----------------------
 'exciting'      | 'boring'    | TRUE
 'boring'        | 'boring'    | FALSE
 NULL            | 'boring'    | NULL (Unknown)
-#+end_quote
+#+end_example
 
 ** Count
 Count(*) calculate all rows
@@ -241,7 +241,7 @@ Let's understand EXISTS and how this query works:
 
 2. Query Execution Flow:
 
-#+begin_quote
+#+begin_example
 -- For each product in the Product table, the database:
 
 Step 1: Takes a product (p)
@@ -257,9 +257,9 @@ Step 4: Returns the product if:
         - First EXISTS is TRUE (has sales in Q1 2019)
         AND
         - NOT EXISTS is TRUE (no sales outside Q1 2019)
-#+end_quote
+#+end_example
 
-#+begin_quote
+#+begin_example
 Product in Q1 2019 only?
 ┌─────────────────────┐
 │ Check each product  │
@@ -281,7 +281,7 @@ Product in Q1 2019 only?
     │ Include   │   Skip  Skip
     │ in result │
     └───────────┘
-#+end_quote
+#+end_example
 
 * 1141. User Activity for the Past 30 Days I :easy:
 
@@ -788,13 +788,13 @@ column_name ~ 'pattern'
 
 Where:
 
-#+begin_quote
+#+begin_example
 
 ~ is PostgreSQL's regular expression match operator
 ~* would be case-insensitive match
 !~ would be "does not match"
 
-#+end_quote
+#+end_example
 
 * 1661. Average Time of Process per Machine :easy:
 
@@ -977,7 +977,7 @@ GROUP BY v.category;
 #+end_src
 
 ** Explanation
-#+begin_quote
+#+begin_example
 Initial Data       →        Categorized        →      Final Result
 ┌───────────┐      →    ┌───────────────┐      →   ┌─────────────────┐
 │ Accounts  │      →    │ All possible  │      →   │ Categories with │
@@ -988,7 +988,7 @@ Initial Data       →        Categorized        →      Final Result
       │            →            │                           │
       └────────────→────────────┘            ───────────────┘
                    LEFT JOIN
-#+end_quote
+#+end_example
 
 
 Key Points to Remember:
